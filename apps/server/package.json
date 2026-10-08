@@ -1,0 +1,30 @@
+{
+  "name": "@kestrel/server",
+  "version": "0.0.1",
+  "private": true,
+  "description": "KESTREL control plane: auth, organizations, projects, sandboxes and the live canvas channel.",
+  "scripts": {
+    "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
+    "start": "tsx --env-file-if-exists=.env src/main.ts",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@fastify/websocket": "^11.3.3",
+    "@kestrel/ai": "*",
+    "@kestrel/core": "*",
+    "@kestrel/protocol": "*",
+    "@kestrel/sandbox": "*",
+    "better-auth": "^1.7.7",
+    "fastify": "^5.12.5",
+    "kysely": "^0.29.6",
+    "pg": "^8.23.1",
+    "@better-auth/kysely-adapter": "^1.7.7"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.15.0",
+    "@types/ws": "^8.18.2",
+    "tsx": "^4.23.15",
+    "ws": "^8.22.0"
+  },
+  "type": "module"
+}
