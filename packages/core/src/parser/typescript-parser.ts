@@ -11,7 +11,7 @@ import {
 
 import { noopLogger, type Logger } from '../logger';
 import type { ScannedFile } from '../scanner/repository-scanner';
-import { readFunctions, readRoutes } from './function-reader';
+import { readFunctions, readGlobalPrefix, readRoutes } from './function-reader';
 import {
   baseTypeName,
   collectReferences,
@@ -145,6 +145,7 @@ export class TypeScriptParser {
       functions: readFunctions(sourceFile),
       routes: readRoutes(sourceFile),
       imports,
+      globalPrefix: readGlobalPrefix(sourceFile),
       failed: false,
     };
   }

@@ -277,11 +277,23 @@ export class GraphBuilder {
       }
     }
 
+    // A global prefix belongs to the application whose bootstrap declares it.
+    const globalPrefixes = new Map<string, string>();
+    for (const file of input.files) {
+      if (file.globalPrefix) {
+        globalPrefixes.set(projectFor(file.filePath).id, file.globalPrefix);
+      }
+    }
+
     // 3. Controllers, providers and entities.
     for (const component of input.analysis.components) {
       classNode(component.declaration, component.nodeType, {
         role: component.role,
         route: component.route,
+        globalPrefix:
+          component.nodeType === 'controller'
+            ? globalPrefixes.get(projectFor(component.declaration.filePath).id)
+            : undefined,
         methods: component.declaration.methods.filter((method) => method.decorators.length > 0),
       });
     }

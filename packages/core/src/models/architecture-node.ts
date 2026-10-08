@@ -105,6 +105,8 @@ export interface ArchitectureNodeMetadata {
   accessesDatabase?: boolean;
   /** Route prefix declared by `@Controller('users')`. */
   route?: string;
+  /** Prefix the application adds to every route (`app.setGlobalPrefix('api')`). */
+  globalPrefix?: string;
   /** 1-based line of the class declaration, used when opening the file. */
   line?: number;
   /** Name of the workspace folder the node was discovered in. */

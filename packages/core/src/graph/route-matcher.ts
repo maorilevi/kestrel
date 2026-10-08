@@ -20,7 +20,10 @@ export function buildRouteTable(nodes: readonly ArchitectureNode[]): RouteTarget
     if (node.type !== 'controller') {
       continue;
     }
-    const basePath = normalizeRoute(String(node.metadata?.route ?? ''));
+    const basePath = joinRoute(
+      normalizeRoute(String(node.metadata?.globalPrefix ?? '')),
+      String(node.metadata?.route ?? ''),
+    );
     const methods = (node.metadata?.methods ?? []) as ArchitectureNodeMethod[];
 
     const fullPaths = methods

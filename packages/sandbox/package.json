@@ -1,0 +1,15 @@
+{
+  "name": "@kestrel/sandbox",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Isolated runtimes for KESTREL projects: a local provider for development and E2B for production.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "e2b": "^2.53.1"
+  }
+}

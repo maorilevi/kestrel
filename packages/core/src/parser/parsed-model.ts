@@ -156,6 +156,8 @@ export interface ParsedFile {
   functions: ParsedFunction[];
   routes: ParsedRoute[];
   imports: ParsedImportBinding[];
+  /** Literal passed to `app.setGlobalPrefix(...)` in this file, if any. */
+  globalPrefix?: string;
   /** True when the file could not be parsed completely. */
   failed: boolean;
 }

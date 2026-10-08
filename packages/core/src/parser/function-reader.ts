@@ -1,5 +1,6 @@
 import {
   Node,
+  SyntaxKind,
   type ArrowFunction,
   type FunctionDeclaration,
   type FunctionExpression,
@@ -234,6 +235,11 @@ function collectFrom(root: Node): CollectedBody {
         return;
       }
       calls.add(callee);
+      // A member call on an imported object (`api.get(...)`) also uses the object.
+      const receiver = receiverName(node);
+      if (receiver) {
+        calls.add(receiver);
+      }
 
       const path = literalPath(node);
       if (path) {
@@ -254,6 +260,24 @@ function collectFrom(root: Node): CollectedBody {
 function lastSegment(tag: string): string {
   const segments = tag.split('.');
   return segments[segments.length - 1];
+}
+
+/**
+ * The route prefix a NestJS bootstrap applies to every controller:
+ * `app.setGlobalPrefix('api')` → `api`. Only a literal argument is read.
+ */
+export function readGlobalPrefix(sourceFile: SourceFile): string | undefined {
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    const expression = call.getExpression();
+    if (!Node.isPropertyAccessExpression(expression) || expression.getName() !== 'setGlobalPrefix') {
+      continue;
+    }
+    const [argument] = call.getArguments();
+    if (argument && (Node.isStringLiteral(argument) || Node.isNoSubstitutionTemplateLiteral(argument))) {
+      return argument.getLiteralValue();
+    }
+  }
+  return undefined;
 }
 
 /** `api.get(...)` → `api`. */

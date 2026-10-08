@@ -1,5 +1,4 @@
-import type { ArchitectureService } from '@kestrel/core';
-import type { Logger } from '@kestrel/core';
+import type { ArchitectureGraph, Logger } from '@kestrel/core';
 import { buildChatContext } from './chat-context';
 import {
   ChatNotConfiguredError,
@@ -20,6 +19,14 @@ export interface ChatHandlers {
   onError(message: string, remedyCommand?: string): void;
 }
 
+/**
+ * Where the chat reads the current architecture from: the engine itself in the
+ * extension, the latest graph a sandbox streamed in the web control plane.
+ */
+export interface GraphSource {
+  getGraph(): ArchitectureGraph;
+}
+
 export interface ChatStatus {
   ready: boolean;
   provider?: string;
@@ -38,7 +45,7 @@ export class ChatService {
   private inFlight: AbortController | undefined;
 
   constructor(
-    private readonly architecture: ArchitectureService,
+    private readonly architecture: GraphSource,
     private readonly providers: readonly ChatProvider[],
     private readonly logger: Logger,
     /** Reads the configured preference on every request. */
