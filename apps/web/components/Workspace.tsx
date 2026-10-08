@@ -59,6 +59,8 @@ export function Workspace({ projectId }: { projectId: string }) {
 
   useEffect(() => {
     const next = new ProjectChannel(projectId);
+    // Opening a stopped project starts it, the way a stopped project paused itself when nobody watched.
+    let firstState = true;
     const offState = next.onState(setConnection);
     const offMessages = next.subscribe((message) => {
       setRuns((current) => applyAgentMessage(current, message));
@@ -81,6 +83,12 @@ export function Workspace({ projectId }: { projectId: string }) {
           }
           break;
         case 'PROJECT_STATE':
+          if (firstState) {
+            firstState = false;
+            if (message.status === 'stopped' || message.status === 'idle') {
+              next.send({ type: 'START_PROJECT' });
+            }
+          }
           setStatus(message.status);
           setPreviewUrl(message.previewUrl);
           setStatusError(message.error);

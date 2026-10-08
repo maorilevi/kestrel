@@ -1,9 +1,11 @@
 import { betterAuth, type BetterAuthOptions } from 'better-auth';
+import { APIError } from 'better-auth/api';
 import { getMigrations } from 'better-auth/db/migration';
 import { organization } from 'better-auth/plugins';
 
 import type { ServerConfig } from './config';
 import type { DatabaseHandle } from './db';
+import { isSignupAllowed } from './signup-policy';
 
 function authOptions(config: ServerConfig, database: DatabaseHandle) {
   return {
@@ -12,6 +14,20 @@ function authOptions(config: ServerConfig, database: DatabaseHandle) {
     database: { db: database.db, type: database.type },
     trustedOrigins: [config.webOrigin],
     emailAndPassword: { enabled: true },
+    databaseHooks: {
+      user: {
+        create: {
+          before: async (user) => {
+            if (!isSignupAllowed(config.signup, user.email)) {
+              throw APIError.from('FORBIDDEN', {
+                code: 'INVITE_ONLY',
+                message: 'KESTREL is in private beta. Ask for an invite to sign up with this address.',
+              });
+            }
+          },
+        },
+      },
+    },
     plugins: [
       // Every project belongs to an organization: a founder's personal one or a team's.
       organization(),

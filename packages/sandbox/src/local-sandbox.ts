@@ -127,6 +127,10 @@ class LocalSandbox implements Sandbox {
     });
   }
 
+  async keepAlive(): Promise<void> {
+    // Local folders never time out.
+  }
+
   async destroy(): Promise<void> {
     for (const child of this.processes) {
       killTree(child);

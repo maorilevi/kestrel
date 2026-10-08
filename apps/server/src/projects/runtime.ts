@@ -21,6 +21,8 @@ export interface RuntimeDependencies {
   logger: Logger;
   agent: AgentSettings;
   runs: AgentRunStore;
+  /** How long a project keeps running after the last viewer leaves. */
+  idleStopMs?: number;
   /** How long the dev server may take to answer before the project is in error. */
   devServerTimeoutMs?: number;
 }
@@ -58,6 +60,8 @@ export class ProjectRuntime implements GraphSource {
   private readonly graphWaiters = new Set<{ after: number; resolve: (graph: ArchitectureGraph) => void }>();
 
   readonly agent: AgentSession;
+  private idleTimer: NodeJS.Timeout | undefined;
+  private readonly keepAliveTimer: NodeJS.Timeout;
 
   constructor(
     private record: ProjectRecord,
@@ -78,6 +82,13 @@ export class ProjectRuntime implements GraphSource {
       deps.runs,
       deps.logger,
     );
+    // While anyone watches the project or the agent works, the provider must not pause the sandbox.
+    this.keepAliveTimer = setInterval(() => {
+      if (this.sandbox && (this.listeners.size > 0 || this.agent.running)) {
+        this.sandbox.keepAlive().catch((error: unknown) => this.deps.logger.warn(`Keep-alive failed: ${describe(error)}`));
+      }
+    }, 4 * 60_000);
+    this.keepAliveTimer.unref();
   }
 
   get id(): string {
@@ -98,6 +109,7 @@ export class ProjectRuntime implements GraphSource {
     listener({ type: 'PROJECT_LOG_HISTORY', entries: [...this.log] });
     listener(this.architectureMessage());
     this.listeners.add(listener);
+    clearTimeout(this.idleTimer);
     void this.agent.snapshot().then(
       (messages) => {
         if (this.listeners.has(listener)) {
@@ -106,7 +118,10 @@ export class ProjectRuntime implements GraphSource {
       },
       (error: unknown) => this.deps.logger.warn(`Could not load agent history: ${describe(error)}`),
     );
-    return () => this.listeners.delete(listener);
+    return () => {
+      this.listeners.delete(listener);
+      this.scheduleIdleStop();
+    };
   }
 
   architectureMessage(): ChannelMessage {
@@ -139,8 +154,25 @@ export class ProjectRuntime implements GraphSource {
     }
   }
 
+  /** Stops a project nobody is looking at, so its sandbox can pause; the next visit starts it again. */
+  private scheduleIdleStop(): void {
+    clearTimeout(this.idleTimer);
+    if (this.listeners.size > 0) {
+      return;
+    }
+    this.idleTimer = setTimeout(() => {
+      if (this.listeners.size === 0 && !this.agent.running && ACTIVE.has(this.status)) {
+        this.system('Nobody has the project open: stopping it until the next visit.');
+        void this.stop();
+      }
+    }, this.deps.idleStopMs ?? 10 * 60_000);
+    this.idleTimer.unref();
+  }
+
   /** Stops the project and deletes its sandbox. */
   async destroy(): Promise<void> {
+    clearTimeout(this.idleTimer);
+    clearInterval(this.keepAliveTimer);
     await this.stop();
     const sandbox = this.sandbox ?? (await this.reattach());
     await sandbox?.destroy();

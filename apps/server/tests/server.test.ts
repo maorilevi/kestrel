@@ -88,10 +88,17 @@ let baseUrl: string;
 
 beforeAll(async () => {
   const config = {
-    ...loadConfig({ NODE_ENV: 'test', BETTER_AUTH_URL: 'http://localhost:4000', WEB_ORIGIN, KESTREL_DATA_DIR: root }),
+    ...loadConfig({
+      NODE_ENV: 'test',
+      BETTER_AUTH_URL: 'http://localhost:4000',
+      WEB_ORIGIN,
+      KESTREL_DATA_DIR: root,
+      KESTREL_ALLOWED_EMAILS: '@example.com',
+    }),
     repoRoot: writeFakeTemplate(),
   };
-  const database = openDatabase(':memory:');
+  // KESTREL_TEST_DATABASE_URL=postgres://… runs the suite against Postgres, as production does.
+  const database = openDatabase(process.env.KESTREL_TEST_DATABASE_URL ?? ':memory:');
   await migrate(database);
   const auth = await createAuth(config, database);
   const silent = { info: () => undefined, warn: () => undefined, error: () => undefined };
@@ -189,6 +196,16 @@ function openChannel(ticket: string) {
 }
 
 describe('control plane', () => {
+  it('only lets invited addresses sign up', async () => {
+    const response = await fetch(`${baseUrl}/api/auth/sign-up/email`, {
+      method: 'POST',
+      headers: { 'content-type': 'application/json', origin: WEB_ORIGIN },
+      body: JSON.stringify({ email: 'intruder@elsewhere.test', password: 'correct horse battery', name: 'Intruder' }),
+    });
+    expect(response.status).toBe(403);
+    expect(((await response.json()) as { code?: string }).code).toBe('INVITE_ONLY');
+  });
+
   it('refuses project APIs without a session', async () => {
     const response = await fetch(`${baseUrl}/api/projects`);
     expect(response.status).toBe(401);

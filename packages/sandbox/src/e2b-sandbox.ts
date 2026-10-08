@@ -12,16 +12,17 @@ import {
 
 export interface E2BProviderOptions {
   apiKey: string;
-  /** E2B template name or id; the default image ships Node and git. */
+  /** E2B template name; build `kestrel-node` with `npm run e2b:template -w @kestrel/sandbox`. */
   template?: string;
-  /** Idle lifetime before E2B pauses or kills the sandbox. */
+  /** Idle time after which E2B pauses the sandbox (files and processes are kept). */
   timeoutMs?: number;
 }
 
 const WORKDIR = '/home/user/project';
 const TOOLDIR = '/home/user/.kestrel';
-/** Every E2B sandbox is its own VM, so one fixed port per role is enough. */
-const DEV_PORT = 3000;
+/** Every E2B sandbox is its own VM, so ports are simply handed out in order. */
+const FIRST_PORT = 3000;
+const DEFAULT_TIMEOUT_MS = 15 * 60_000;
 
 export class E2BSandboxProvider implements SandboxProvider {
   readonly id = 'e2b';
@@ -29,20 +30,25 @@ export class E2BSandboxProvider implements SandboxProvider {
   constructor(private readonly options: E2BProviderOptions) {}
 
   async create(options: { projectId: string }): Promise<Sandbox> {
-    const client = await E2BSandboxClient.create(this.options.template ?? 'base', {
+    const timeoutMs = this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+    const client = await E2BSandboxClient.create(this.options.template ?? 'kestrel-node', {
       apiKey: this.options.apiKey,
-      timeoutMs: this.options.timeoutMs ?? 30 * 60_000,
+      timeoutMs,
+      // A project's code lives in its sandbox: an idle sandbox is paused, never deleted.
+      lifecycle: { onTimeout: 'pause', autoResume: false },
       metadata: { kestrelProjectId: options.projectId },
     });
     await client.files.makeDir(WORKDIR);
     await client.files.makeDir(TOOLDIR);
-    return new E2BSandbox(client);
+    return new E2BSandbox(client, timeoutMs);
   }
 
   async connect(sandboxId: string): Promise<Sandbox | undefined> {
+    const timeoutMs = this.options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
     try {
-      const client = await E2BSandboxClient.connect(sandboxId, { apiKey: this.options.apiKey });
-      return new E2BSandbox(client);
+      // Connecting resumes a paused sandbox.
+      const client = await E2BSandboxClient.connect(sandboxId, { apiKey: this.options.apiKey, timeoutMs });
+      return new E2BSandbox(client, timeoutMs);
     } catch {
       return undefined;
     }
@@ -52,8 +58,12 @@ export class E2BSandboxProvider implements SandboxProvider {
 class E2BSandbox implements Sandbox {
   readonly workdir = WORKDIR;
   readonly tooldir = TOOLDIR;
+  private nextPort = FIRST_PORT;
 
-  constructor(private readonly client: E2BSandboxClient) {}
+  constructor(
+    private readonly client: E2BSandboxClient,
+    private readonly timeoutMs: number,
+  ) {}
 
   get id(): string {
     return this.client.sandboxId;
@@ -124,7 +134,13 @@ class E2BSandbox implements Sandbox {
   }
 
   async allocatePort(): Promise<number> {
-    return DEV_PORT;
+    const port = this.nextPort;
+    this.nextPort += 1;
+    return port;
+  }
+
+  async keepAlive(): Promise<void> {
+    await this.client.setTimeout(this.timeoutMs);
   }
 
   async destroy(): Promise<void> {

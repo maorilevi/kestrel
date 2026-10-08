@@ -6,6 +6,9 @@ const server = process.env.KESTREL_SERVER_URL ?? 'http://localhost:4000';
 
 /** @type {import('next').NextConfig} */
 const config = {
+  // A self-contained server (node server.js) for the container image.
+  output: 'standalone',
+  outputFileTracingRoot: path.join(here, '..', '..'),
   // The workspace packages ship TypeScript source.
   transpilePackages: ['@kestrel/ui', '@kestrel/core', '@kestrel/protocol'],
   turbopack: { root: path.join(here, '..', '..') },

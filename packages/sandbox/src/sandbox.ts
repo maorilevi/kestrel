@@ -59,6 +59,12 @@ export interface Sandbox {
   /** A port that is free for this sandbox's dev server. */
   allocatePort(): Promise<number>;
 
+  /**
+   * Postpones the provider's idle timeout. Called while someone is working on
+   * the project; a sandbox nobody keeps alive is paused by its provider.
+   */
+  keepAlive(): Promise<void>;
+
   /** Stops every process and releases the sandbox. */
   destroy(): Promise<void>;
 }

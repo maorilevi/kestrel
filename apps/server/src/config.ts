@@ -2,6 +2,8 @@ import { randomBytes } from 'node:crypto';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { parseSignupPolicy, type SignupPolicy } from './signup-policy';
+
 export interface ServerConfig {
   port: number;
   webOrigin: string;
@@ -15,6 +17,7 @@ export interface ServerConfig {
   chatModel: string;
   agentModel: string;
   agentEffort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  signup: SignupPolicy;
   /** Root of the KESTREL repository, for templates and the scanner bundle. */
   repoRoot: string;
 }
@@ -46,13 +49,20 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     authSecret = randomBytes(32).toString('hex');
   }
 
+  // Development is open; production is invite-only unless sign-up is opened explicitly.
+  const openSignup = env.KESTREL_OPEN_SIGNUP === 'true' || (!production && !env.KESTREL_ALLOWED_EMAILS);
+  const signup = parseSignupPolicy(env.KESTREL_ALLOWED_EMAILS, openSignup);
+  if (production && !signup.open && signup.emails.size === 0 && signup.domains.size === 0) {
+    throw new Error('Set KESTREL_ALLOWED_EMAILS (or KESTREL_OPEN_SIGNUP=true) in production.');
+  }
+
   const providerName = env.SANDBOX_PROVIDER ?? 'local';
   let sandbox: ServerConfig['sandbox'];
   if (providerName === 'e2b') {
     if (!env.E2B_API_KEY) {
       throw new Error('SANDBOX_PROVIDER=e2b needs E2B_API_KEY.');
     }
-    sandbox = { provider: 'e2b', apiKey: env.E2B_API_KEY, template: env.E2B_TEMPLATE ?? 'base' };
+    sandbox = { provider: 'e2b', apiKey: env.E2B_API_KEY, template: env.E2B_TEMPLATE ?? 'kestrel-node' };
   } else if (providerName === 'local') {
     if (production) {
       throw new Error('The local sandbox provider has no isolation and cannot run in production.');
@@ -74,6 +84,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     chatModel: env.KESTREL_CHAT_MODEL ?? 'claude-opus-5',
     agentModel: env.KESTREL_AGENT_MODEL ?? 'claude-opus-5',
     agentEffort: parseEffort(env.KESTREL_AGENT_EFFORT),
+    signup,
     repoRoot: path.resolve(here, '..', '..', '..'),
   };
 }

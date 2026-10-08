@@ -1,0 +1,41 @@
+# KESTREL control plane on Fly.io. See DEPLOY.md.
+# App names are global on Fly: if "kestrel-server" is taken, change it here,
+# in fly.web.toml (build args) and in the WEB_ORIGIN / BETTER_AUTH_URL below.
+app = "kestrel-server"
+primary_region = "fra"
+
+[build]
+  dockerfile = "deploy/server.Dockerfile"
+
+[env]
+  NODE_ENV = "production"
+  PORT = "4000"
+  SANDBOX_PROVIDER = "e2b"
+  E2B_TEMPLATE = "kestrel-node"
+  WEB_ORIGIN = "https://kestrel-web.fly.dev"
+  # The public origin users sign in on; auth requests reach this server through the web app.
+  BETTER_AUTH_URL = "https://kestrel-web.fly.dev"
+  KESTREL_AGENT_MODEL = "claude-opus-5"
+  KESTREL_CHAT_MODEL = "claude-opus-5"
+  # Secrets, set with `fly secrets set -c fly.server.toml ...`:
+  #   BETTER_AUTH_SECRET, DATABASE_URL, E2B_API_KEY, ANTHROPIC_API_KEY, KESTREL_ALLOWED_EMAILS
+
+[http_service]
+  internal_port = 4000
+  force_https = true
+  # Project runtimes, agent runs and channel tickets live in memory: exactly one
+  # machine, always on. Deploy with --ha=false.
+  auto_stop_machines = "off"
+  auto_start_machines = true
+  min_machines_running = 1
+
+  [[http_service.checks]]
+    method = "GET"
+    path = "/api/health"
+    interval = "15s"
+    timeout = "5s"
+    grace_period = "20s"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "512mb"
