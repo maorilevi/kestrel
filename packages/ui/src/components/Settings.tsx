@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
 
 import type { SettingsSnapshot } from '../types/architecture';
-import { onExtensionMessage, postRequest } from '../host/host';
+import { hostSupportsCommands, onExtensionMessage, postRequest } from '../host/host';
 
 export interface SettingsProps {
   onClose: () => void;
@@ -140,6 +140,7 @@ export function Settings({ onClose }: SettingsProps) {
                 : 'Not connected yet.'}
             </p>
 
+            {hostSupportsCommands() ? (
             <div className="kestrel-inspector__actions">
               <button
                 type="button"
@@ -155,6 +156,7 @@ export function Settings({ onClose }: SettingsProps) {
                 Test connection
               </button>
             </div>
+            ) : null}
           </Group>
         ) : null}
 

@@ -1,0 +1,43 @@
+/*
+ * Theme for hosts other than VS Code.
+ *
+ * The canvas is styled with VS Code's theme tokens so it matches the editor it
+ * runs in. A web host wraps the canvas in `.kestrel-host` and gets the same
+ * tokens from this palette instead.
+ */
+.kestrel-host {
+  --vscode-font-family: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --vscode-editor-font-family: 'JetBrains Mono', ui-monospace, 'Cascadia Code', Menlo, Consolas, monospace;
+  --vscode-font-size: 13px;
+
+  --vscode-foreground: #d7dae0;
+  --vscode-editor-background: #0d1017;
+  --vscode-sideBar-background: #11151d;
+  --vscode-editorWidget-background: #151a24;
+  --vscode-widget-border: rgba(148, 160, 184, 0.18);
+  --vscode-focusBorder: #7aa2f7;
+  --vscode-list-hoverBackground: rgba(122, 162, 247, 0.1);
+  --vscode-textLink-foreground: #7aa2f7;
+
+  --vscode-button-background: #7aa2f7;
+  --vscode-button-foreground: #0d1017;
+  --vscode-button-hoverBackground: #94b4fa;
+  --vscode-button-secondaryBackground: rgba(148, 160, 184, 0.08);
+  --vscode-button-secondaryForeground: #d7dae0;
+  --vscode-button-secondaryHoverBackground: rgba(148, 160, 184, 0.16);
+
+  --vscode-input-background: #0d1017;
+  --vscode-input-foreground: #d7dae0;
+  --vscode-input-border: rgba(148, 160, 184, 0.24);
+
+  --vscode-badge-background: #283044;
+  --vscode-badge-foreground: #d7dae0;
+
+  --vscode-errorForeground: #f7768e;
+  --vscode-editorError-foreground: #f7768e;
+  --vscode-editorWarning-foreground: #e0af68;
+  --vscode-inputValidation-errorBackground: rgba(247, 118, 142, 0.12);
+  --vscode-inputValidation-errorForeground: #f7768e;
+
+  color-scheme: dark;
+}

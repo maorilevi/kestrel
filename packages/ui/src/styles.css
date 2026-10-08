@@ -17,27 +17,24 @@
   --kestrel-gap: 12px;
 }
 
-* {
+/*
+ * Everything is scoped to the canvas root so it can be embedded in any page.
+ * `:where()` keeps the specificity these rules had as bare element selectors.
+ * Page-level rules for the VS Code webview live in webview.css.
+ */
+:where(.kestrel-app),
+:where(.kestrel-app) * {
   box-sizing: border-box;
 }
 
-html,
-body,
-#root {
-  height: 100%;
-  margin: 0;
-  padding: 0;
-}
-
-body {
+:where(.kestrel-app) {
   font-family: var(--vscode-font-family);
   font-size: var(--vscode-font-size, 13px);
   color: var(--vscode-foreground);
   background: var(--vscode-editor-background);
-  overflow: hidden;
 }
 
-button {
+:where(.kestrel-app) button {
   font-family: inherit;
   font-size: 12px;
   color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
@@ -48,22 +45,22 @@ button {
   cursor: pointer;
 }
 
-button:hover:not(:disabled) {
+:where(.kestrel-app) button:hover:not(:disabled) {
   background: var(--vscode-button-secondaryHoverBackground, rgba(128, 128, 128, 0.15));
 }
 
-button:disabled {
+:where(.kestrel-app) button:disabled {
   opacity: 0.5;
   cursor: default;
 }
 
-button.is-primary {
+:where(.kestrel-app) button.is-primary {
   color: var(--vscode-button-foreground);
   background: var(--vscode-button-background);
   border-color: transparent;
 }
 
-button.is-primary:hover:not(:disabled) {
+:where(.kestrel-app) button.is-primary:hover:not(:disabled) {
   background: var(--vscode-button-hoverBackground);
 }
 
@@ -942,7 +939,7 @@ button.is-primary:hover:not(:disabled) {
   font-variant-numeric: tabular-nums;
 }
 
-button.is-active {
+:where(.kestrel-app) button.is-active {
   color: var(--vscode-button-foreground);
   background: var(--vscode-button-background);
   border-color: transparent;

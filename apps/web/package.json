@@ -1,0 +1,20 @@
+{
+  "name": "@kestrel/web",
+  "version": "0.0.1",
+  "private": true,
+  "description": "KESTREL web app: projects, the live architecture canvas, preview and logs.",
+  "scripts": {
+    "dev": "next dev --port 3000",
+    "build": "next build",
+    "start": "next start --port 3000",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@kestrel/protocol": "*",
+    "@kestrel/ui": "*",
+    "better-auth": "^1.7.7",
+    "next": "^16.4.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8"
+  }
+}

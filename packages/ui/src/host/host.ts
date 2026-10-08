@@ -14,6 +14,8 @@ export interface HostTransport {
   /** View state that survives a reload of the canvas (scroll, selection, layout). */
   getState(): unknown;
   setState(state: unknown): void;
+  /** True when the host runs editor commands (`RUN_COMMAND`), as VS Code does. */
+  readonly supportsCommands?: boolean;
 }
 
 interface VsCodeApi {
@@ -48,6 +50,7 @@ export function createVsCodeTransport(api: VsCodeApi): HostTransport {
     onMessage: onWindowMessage,
     getState: () => api.getState(),
     setState: (state) => api.setState(state),
+    supportsCommands: true,
   };
 }
 
@@ -87,6 +90,11 @@ export function postRequest(request: WebviewRequest): void {
 
 export function onExtensionMessage(handler: (message: ExtensionMessage) => void): () => void {
   return current().onMessage(handler);
+}
+
+/** Whether buttons that run editor commands make sense in this host. */
+export function hostSupportsCommands(): boolean {
+  return current().supportsCommands === true;
 }
 
 export function getPersistedState<T>(): T | undefined {

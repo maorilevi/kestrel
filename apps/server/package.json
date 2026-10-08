@@ -4,8 +4,9 @@
   "private": true,
   "description": "KESTREL control plane: auth, organizations, projects, sandboxes and the live canvas channel.",
   "scripts": {
-    "dev": "tsx watch --env-file-if-exists=.env src/main.ts",
-    "start": "tsx --env-file-if-exists=.env src/main.ts",
+    "dev": "node build.mjs --watch",
+    "build": "node build.mjs",
+    "start": "node --env-file-if-exists=.env --enable-source-maps dist/main.mjs",
     "typecheck": "tsc -p tsconfig.json"
   },
   "dependencies": {
@@ -23,7 +24,6 @@
   "devDependencies": {
     "@types/pg": "^8.15.0",
     "@types/ws": "^8.18.2",
-    "tsx": "^4.23.15",
     "ws": "^8.22.0"
   },
   "type": "module"

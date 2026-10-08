@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { ArchitectureNode } from '../types/architecture';
-import { onExtensionMessage, postRequest } from '../host/host';
+import { hostSupportsCommands, onExtensionMessage, postRequest } from '../host/host';
 
 export interface ChatProps {
   nodes: ArchitectureNode[];
@@ -249,13 +249,15 @@ export function Chat({
                 </button>
               ))}
             </div>
-            <button
-              type="button"
-              className="kestrel-link"
-              onClick={() => postRequest({ type: 'RUN_COMMAND', command: 'kestrel.testChat' })}
-            >
-              Test the connection
-            </button>
+            {hostSupportsCommands() ? (
+              <button
+                type="button"
+                className="kestrel-link"
+                onClick={() => postRequest({ type: 'RUN_COMMAND', command: 'kestrel.testChat' })}
+              >
+                Test the connection
+              </button>
+            ) : null}
           </div>
         ) : null}
 
@@ -287,7 +289,7 @@ export function Chat({
         {error ? (
           <div className="kestrel-banner kestrel-banner--error">
             <p>{error.message}</p>
-            {error.remedyCommand ? (
+            {error.remedyCommand && hostSupportsCommands() ? (
               <button
                 type="button"
                 className="is-primary"
@@ -303,6 +305,7 @@ export function Chat({
       {!status.ready && status.message ? (
         <div className="kestrel-chat__setup">
           <p className="kestrel-hint">{status.message}</p>
+          {hostSupportsCommands() ? (
           <div className="kestrel-inspector__actions">
             <button
               type="button"
@@ -319,6 +322,7 @@ export function Chat({
               Use an API key
             </button>
           </div>
+          ) : null}
         </div>
       ) : null}
 

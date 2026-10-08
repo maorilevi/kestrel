@@ -1,6 +1,7 @@
 import { promises as fs } from 'node:fs';
 
-import { createEmptyGraph, type ArchitectureGraph, type Logger } from '@kestrel/core';
+import type { Logger } from '@kestrel/core';
+import { createEmptyGraph, type ArchitectureGraph } from '@kestrel/core/model';
 import type { GraphSource } from '@kestrel/ai';
 import type { ChannelMessage, LogStream, ProjectStatus } from '@kestrel/protocol';
 import type { Sandbox, SandboxProcess, SandboxProvider } from '@kestrel/sandbox';
