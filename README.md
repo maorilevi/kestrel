@@ -44,6 +44,15 @@ browser ──HTTP /api──▶ Next.js (rewrite) ──▶ control plane ─�
 The control plane never parses code itself: the scanner runs inside the sandbox
 next to the code and streams graphs, which the channel forwards to the canvas.
 
+### How an agent run works
+
+1. You select components on the canvas and choose **Ask agent**, or just type a request.
+2. The coding agent (`@kestrel/ai`, a streaming Messages API tool loop on `claude-opus-5`) gets the
+   architecture brief and your focus, and works in the sandbox with list/read/write/edit/run tools.
+3. Every step streams to everyone watching the project.
+4. The run becomes one git commit, the scanner rebuilds the graph, and the canvas highlights what
+   was added or changed. The latest run can be undone.
+
 `@kestrel/core/model` and `@kestrel/protocol` are browser-safe. Everything that
 needs Node (ts-morph, the file system) is reachable only from `@kestrel/core`.
 
@@ -72,7 +81,7 @@ sandboxes. Production requires `BETTER_AUTH_SECRET`, a Postgres
 | --- | --- |
 | **M0 Foundations** | Monorepo, headless engine, host-agnostic canvas *(done)* |
 | **M1 Web shell** | Sign in, create from template or import from GitHub, sandbox with live preview, live canvas *(done)* |
-| **M2 Agent loop** | Prompt or graph selection → agent in the sandbox → code diff + architecture diff → commit / PR |
+| **M2 Agent loop** | Prompt or graph selection → agent in the sandbox → commit + architecture diff on the canvas, undo *(done; GitHub PRs next)* |
 | **M3 Ship & observe** | One-click deploy, OpenTelemetry, production metrics and traces on the graph |
 | **M4 Product & teams** | Analytics overlay, funnels, roles and permissions, growth assistant |
 

@@ -1,4 +1,4 @@
-import type { ArchitectureGraph } from '@kestrel/core/model';
+import type { ArchitectureDiff, ArchitectureGraph } from '@kestrel/core/model';
 import type { SettingsSnapshot } from './settings-model';
 
 /**
@@ -24,6 +24,8 @@ export type WebviewRequest =
 export type ExtensionMessage =
   | { type: 'ARCHITECTURE_UPDATED'; payload: ArchitectureGraph }
   | { type: 'ARCHITECTURE_LOADING' }
+  /** What the last agent run changed in the architecture; `null` clears the highlight. */
+  | { type: 'ARCHITECTURE_DIFF'; payload: ArchitectureDiff | null }
   | { type: 'ERROR'; message: string }
   | { type: 'CHAT_STATUS'; ready: boolean; provider?: string; message?: string; remedyCommand?: string }
   | { type: 'CHAT_DELTA'; text: string }

@@ -1,14 +1,16 @@
 'use client';
 
-import type { LogStream, ProjectStatus, ProjectSummary } from '@kestrel/protocol';
+import type { AgentRunSummary, LogStream, ProjectStatus, ProjectSummary } from '@kestrel/protocol';
 import dynamic from 'next/dynamic';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useEffect, useRef, useState } from 'react';
 
+import { applyAgentMessage } from '@/lib/agent-runs';
 import { api } from '@/lib/api';
 import { ProjectChannel, type ChannelState } from '@/lib/channel';
 
+import { AgentPanel, type AgentNode } from './AgentPanel';
 import { isBusy, StatusPill } from './StatusPill';
 
 // The canvas measures the DOM and owns its own React root: browser only.
@@ -17,7 +19,7 @@ const Canvas = dynamic(() => import('./Canvas'), {
   loading: () => <div className="placeholder">Loading the canvas…</div>,
 });
 
-type Tab = 'preview' | 'logs' | 'code';
+type Tab = 'agent' | 'preview' | 'logs' | 'code';
 
 interface LogEntry {
   stream: LogStream;
@@ -46,6 +48,10 @@ export function Workspace({ projectId }: { projectId: string }) {
   const [file, setFile] = useState<OpenFile>();
   const [tab, setTab] = useState<Tab>('logs');
   const [previewKey, setPreviewKey] = useState(0);
+  const [runs, setRuns] = useState<AgentRunSummary[]>([]);
+  const [agentFocus, setAgentFocus] = useState<string[]>([]);
+  const [agentError, setAgentError] = useState<string>();
+  const [nodes, setNodes] = useState<ReadonlyMap<string, AgentNode>>(new Map());
 
   useEffect(() => {
     api.project(projectId).then(setProject, (error: Error) => setLoadError(error.message));
@@ -55,7 +61,25 @@ export function Workspace({ projectId }: { projectId: string }) {
     const next = new ProjectChannel(projectId);
     const offState = next.onState(setConnection);
     const offMessages = next.subscribe((message) => {
+      setRuns((current) => applyAgentMessage(current, message));
       switch (message.type) {
+        case 'ARCHITECTURE_UPDATED':
+          setNodes(new Map(message.payload.nodes.map((node) => [node.id, { id: node.id, name: node.name, type: node.type }])));
+          break;
+        case 'AGENT_CONTEXT':
+          setAgentFocus(message.nodeIds);
+          setAgentError(undefined);
+          setTab('agent');
+          break;
+        case 'AGENT_ERROR':
+          setAgentError(message.message);
+          setTab('agent');
+          break;
+        case 'AGENT_RUN':
+          if (message.run.status === 'running') {
+            setAgentError(undefined);
+          }
+          break;
         case 'PROJECT_STATE':
           setStatus(message.status);
           setPreviewUrl(message.previewUrl);
@@ -156,9 +180,19 @@ export function Workspace({ projectId }: { projectId: string }) {
 
         <section className="workspace__side">
           <div className="tabs" role="tablist">
-            {(['preview', 'logs', 'code'] as const).map((name) => (
+            {(['agent', 'preview', 'logs', 'code'] as const).map((name) => (
               <button key={name} role="tab" aria-selected={tab === name} onClick={() => setTab(name)}>
-                {name === 'preview' ? 'Preview' : name === 'logs' ? 'Logs' : file ? fileName(file.filePath) : 'Code'}
+                {name === 'agent'
+                  ? runs.some((run) => run.status === 'running')
+                    ? 'Agent ●'
+                    : 'Agent'
+                  : name === 'preview'
+                    ? 'Preview'
+                    : name === 'logs'
+                      ? 'Logs'
+                      : file
+                        ? fileName(file.filePath)
+                        : 'Code'}
               </button>
             ))}
             {tab === 'preview' && previewUrl ? (
@@ -182,6 +216,24 @@ export function Workspace({ projectId }: { projectId: string }) {
                         : 'Start the project to see its preview.')}
                 </div>
               )
+            ) : null}
+            {tab === 'agent' ? (
+              <AgentPanel
+                runs={runs}
+                nodes={nodes}
+                focus={agentFocus}
+                onFocusChange={setAgentFocus}
+                canRun={running}
+                error={agentError}
+                onStart={(prompt) => {
+                  setAgentError(undefined);
+                  channel?.send({ type: 'AGENT_START', prompt, nodeIds: agentFocus });
+                  setAgentFocus([]);
+                }}
+                onCancel={() => channel?.send({ type: 'AGENT_CANCEL' })}
+                onUndo={(runId) => channel?.send({ type: 'AGENT_UNDO', runId })}
+                onOpenFile={(filePath) => channel?.send({ type: 'OPEN_FILE', filePath })}
+              />
             ) : null}
             {tab === 'logs' ? <LogView entries={logs} /> : null}
             {tab === 'code' ? <CodeView file={file} /> : null}

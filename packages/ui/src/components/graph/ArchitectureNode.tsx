@@ -8,6 +8,8 @@ export type ArchitectureFlowNodeData = {
   isFocus: boolean;
   childCount: number;
   dependencyCount: number;
+  /** Set when the last agent run added or reshaped this node, or something inside it. */
+  change?: 'added' | 'changed' | 'inside';
 };
 
 export type ArchitectureFlowNode = Node<ArchitectureFlowNodeData, 'architecture'>;
@@ -49,6 +51,7 @@ export function ArchitectureNodeView({ data, selected }: NodeProps<ArchitectureF
     selected ? 'is-selected' : '',
     data.dimmed ? 'is-dimmed' : '',
     data.isFocus ? 'is-focus' : '',
+    data.change ? `is-${data.change}` : '',
   ]
     .filter(Boolean)
     .join(' ');
@@ -57,7 +60,11 @@ export function ArchitectureNodeView({ data, selected }: NodeProps<ArchitectureF
     <div className={classNames} title={arch.filePath ?? arch.name}>
       <Handle type="target" position={Position.Top} className="kestrel-handle" />
 
-      <div className="kestrel-node__type">{subtitle}</div>
+      <div className="kestrel-node__type">
+        {subtitle}
+        {data.change === 'added' ? <span className="kestrel-node__change">new</span> : null}
+        {data.change === 'changed' ? <span className="kestrel-node__change">changed</span> : null}
+      </div>
       <div className="kestrel-node__name">{arch.name}</div>
 
       <div className="kestrel-node__meta">

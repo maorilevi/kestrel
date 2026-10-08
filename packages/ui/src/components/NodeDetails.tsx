@@ -1,3 +1,4 @@
+import { hostSupportsCommands } from '../host/host';
 import type { ReactNode } from 'react';
 
 import type { FlowDirection, FlowLeg } from '../state/data-flow';
@@ -85,11 +86,13 @@ export function NodeDetails({
             Trace data flow
           </button>
           <button type="button" className="is-primary" onClick={() => onAskAgent(selectedNodes.map((n) => n.id))}>
-            Ask Claude
+            {AGENT_LABEL()}
           </button>
         </div>
         <p className="kestrel-hint">
-          Copies the selected architecture as context for a coding agent. Deeper agent actions are on the roadmap.
+          {hostSupportsCommands()
+            ? 'Copies the selected architecture as context for a coding agent.'
+            : 'Opens the agent with the selected components as its focus.'}
         </p>
       </aside>
     );
@@ -267,12 +270,13 @@ export function NodeDetails({
           Trace data flow
         </button>
         <button type="button" onClick={() => onAskAgent([node.id])}>
-          Ask Claude
+          {AGENT_LABEL()}
         </button>
       </div>
       <p className="kestrel-hint">
-        &quot;Ask Claude&quot; copies this node&apos;s architectural context to the clipboard — a preview of the
-        agent integration.
+        {hostSupportsCommands()
+          ? '"Ask Claude" copies this node\'s architectural context to the clipboard — a preview of the agent integration.'
+          : '"Ask agent" opens the agent with this component as its focus.'}
       </p>
     </aside>
   );
@@ -446,4 +450,9 @@ function RelationList({
       </ul>
     </Section>
   );
+}
+
+/** The editor copies context for Claude Code; the web platform hands it to its own agent. */
+function AGENT_LABEL(): string {
+  return hostSupportsCommands() ? 'Ask Claude' : 'Ask agent';
 }

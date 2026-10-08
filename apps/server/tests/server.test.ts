@@ -2,7 +2,9 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import * as path from 'node:path';
 
-import type { ChannelMessage } from '@kestrel/protocol';
+import type Anthropic from '@anthropic-ai/sdk';
+import type { CreateAgentStream } from '@kestrel/ai';
+import type { AgentRunSummary, ChannelMessage } from '@kestrel/protocol';
 import { LocalSandboxProvider } from '@kestrel/sandbox';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import WebSocket from 'ws';
@@ -33,6 +35,54 @@ function writeFakeTemplate(): string {
   return repoRoot;
 }
 
+/**
+ * Stands in for the model: on the first turn it writes a new NestJS service,
+ * on the second it reports what it did. Every request is recorded.
+ */
+const agentRequests: Array<Parameters<CreateAgentStream>[0]> = [];
+const agentStream: CreateAgentStream = (params) => {
+  agentRequests.push(params);
+  const firstTurn = params.messages.length === 1;
+  const content = firstTurn
+    ? [
+        { type: 'text', text: 'Adding an audit service.', citations: null },
+        {
+          type: 'tool_use',
+          id: `toolu_${agentRequests.length}`,
+          name: 'write_file',
+          input: {
+            path: 'src/audit.service.ts',
+            content: "import { Injectable } from '@nestjs/common';\n@Injectable()\nexport class AuditService {}\n",
+          },
+        },
+      ]
+    : [{ type: 'text', text: 'Created AuditService.', citations: null }];
+  const message = {
+    id: 'msg',
+    type: 'message',
+    role: 'assistant',
+    model: 'claude-opus-5',
+    content,
+    stop_reason: firstTurn ? 'tool_use' : 'end_turn',
+    stop_sequence: null,
+    usage: { input_tokens: 10, output_tokens: 10 },
+  } as unknown as Anthropic.Beta.BetaMessage;
+  let onText: ((delta: string) => void) | undefined;
+  return {
+    on: (_event, listener) => {
+      onText = listener;
+    },
+    finalMessage: async () => {
+      for (const block of message.content) {
+        if (block.type === 'text') {
+          onText?.(block.text);
+        }
+      }
+      return message;
+    },
+  };
+};
+
 let server: KestrelServer;
 let baseUrl: string;
 
@@ -54,6 +104,7 @@ beforeAll(async () => {
     scannerBundlePath,
     logger: silent,
     devServerTimeoutMs: 30_000,
+    agentStream,
   });
   await server.app.listen({ port: 0, host: '127.0.0.1' });
   const address = server.app.server.address();
@@ -192,6 +243,72 @@ describe('control plane', () => {
     channel.socket.close();
     expect((await call(`/api/projects/${project.id}`, { method: 'DELETE' })).status).toBe(204);
     expect((await call(`/api/projects/${project.id}`)).status).toBe(404);
+  }, 120_000);
+
+  it('runs the agent in the sandbox, commits its work, diffs the architecture and undoes it', async () => {
+    const call = await signUp('agent-user@example.com');
+    const { project } = (await (
+      await call('/api/projects', {
+        method: 'POST',
+        body: JSON.stringify({ name: 'Agent demo', source: { kind: 'template', template: 'fullstack-starter' } }),
+      })
+    ).json()) as { project: { id: string } };
+    const { ticket } = (await (await call(`/api/projects/${project.id}/channel`, { method: 'POST' })).json()) as { ticket: string };
+    const channel = openChannel(ticket);
+    await channel.opened;
+    await channel.waitFor((message) => message.type === 'PROJECT_STATE' && message.status === 'ready');
+    await channel.waitFor((message) => message.type === 'ARCHITECTURE_UPDATED');
+    await channel.waitFor((message) => message.type === 'AGENT_HISTORY');
+
+    // The canvas sends components to the agent; the workspace gets them back as context.
+    channel.socket.send(JSON.stringify({ type: 'ASK_AGENT', nodeIds: ['src/users.service.ts#UsersService'] }));
+    expect(await channel.waitFor((message) => message.type === 'AGENT_CONTEXT')).toMatchObject({
+      nodeIds: ['src/users.service.ts#UsersService'],
+    });
+
+    channel.socket.send(
+      JSON.stringify({ type: 'AGENT_START', prompt: 'Add an audit service', nodeIds: ['src/users.service.ts#UsersService'] }),
+    );
+    const finished = (await channel.waitFor(
+      (message) => message.type === 'AGENT_RUN' && message.run.status !== 'running',
+    )) as { type: 'AGENT_RUN'; run: AgentRunSummary };
+    const run = finished.run;
+
+    expect(run).toMatchObject({ status: 'done', summary: 'Created AuditService.', changedFiles: ['src/audit.service.ts'], startedBy: 'agent-user' });
+    expect(run.commit).toMatch(/^[0-9a-f]{7,}$/);
+    expect(run.architecture?.addedNodes.map((node) => node.name)).toEqual(['AuditService']);
+    expect(run.transcript.some((entry) => entry.kind === 'tool' && entry.step.summary === 'Write src/audit.service.ts' && entry.step.status === 'ok')).toBe(true);
+    const diff = await channel.waitFor((message) => message.type === 'ARCHITECTURE_DIFF' && message.payload !== null);
+    expect(diff).toMatchObject({ payload: { addedNodes: [expect.objectContaining({ name: 'AuditService' })] } });
+
+    // The agent saw the architecture and the focused component.
+    const system = agentRequests[0].system as Anthropic.Beta.BetaTextBlockParam[];
+    expect(system[1].text).toContain('UsersService');
+    expect(agentRequests[0].model).toBe('claude-opus-5');
+
+    channel.socket.send(JSON.stringify({ type: 'OPEN_FILE', filePath: 'src/audit.service.ts' }));
+    await channel.waitFor((message) => message.type === 'FILE_CONTENT' && message.filePath === 'src/audit.service.ts');
+
+    // A second start while nothing runs is fine, but an empty prompt is refused.
+    channel.socket.send(JSON.stringify({ type: 'AGENT_START', prompt: '   ', nodeIds: [] }));
+    expect(await channel.waitFor((message) => message.type === 'AGENT_ERROR')).toMatchObject({ message: 'Tell the agent what to do.' });
+
+    channel.socket.send(JSON.stringify({ type: 'AGENT_UNDO', runId: run.id }));
+    await channel.waitFor((message) => message.type === 'AGENT_RUN' && message.run.id === run.id && message.run.undone === true);
+    await channel.waitFor((message) => message.type === 'ARCHITECTURE_DIFF' && message.payload === null);
+    channel.socket.send(JSON.stringify({ type: 'OPEN_FILE', filePath: 'src/audit.service.ts' }));
+    await channel.waitFor((message) => message.type === 'FILE_ERROR' && message.filePath === 'src/audit.service.ts');
+
+    // History survives a reconnect.
+    const again = openChannel(
+      ((await (await call(`/api/projects/${project.id}/channel`, { method: 'POST' })).json()) as { ticket: string }).ticket,
+    );
+    const history = await again.waitFor((message) => message.type === 'AGENT_HISTORY');
+    expect(history).toMatchObject({ runs: [expect.objectContaining({ id: run.id, undone: true })] });
+
+    channel.socket.close();
+    again.socket.close();
+    await call(`/api/projects/${project.id}`, { method: 'DELETE' });
   }, 120_000);
 
   it('rejects unknown sources', async () => {

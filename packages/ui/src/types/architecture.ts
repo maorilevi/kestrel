@@ -22,6 +22,7 @@ export type {
   DetectedFramework,
   ProjectKind,
   ProjectProfile,
+  ArchitectureDiff,
 } from '@kestrel/core/model';
 
 export { ARCHETYPE_FAMILY, ARCHETYPE_LABELS, ARCHITECTURE_LAYERS, LAYER_LABELS, PROJECT_KIND_LABELS } from '@kestrel/core/model';

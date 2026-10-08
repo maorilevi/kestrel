@@ -6,6 +6,7 @@ import {
   isPlatformRequest,
   isWebviewRequest,
   type ChannelMessage,
+  type PlatformRequest,
   type SettingsSnapshot,
   type WebviewRequest,
 } from '@kestrel/protocol';
@@ -31,24 +32,24 @@ const OPEN = 1;
  * authenticated HTTP session and presents it once.
  */
 export class ChannelTickets {
-  private readonly tickets = new Map<string, { userId: string; projectId: string; expiresAt: number }>();
+  private readonly tickets = new Map<string, { userId: string; userName: string; projectId: string; expiresAt: number }>();
 
   constructor(private readonly ttlMs = 60_000) {}
 
-  issue(userId: string, projectId: string): string {
+  issue(user: { id: string; name: string }, projectId: string): string {
     this.sweep();
     const ticket = randomBytes(24).toString('base64url');
-    this.tickets.set(ticket, { userId, projectId, expiresAt: Date.now() + this.ttlMs });
+    this.tickets.set(ticket, { userId: user.id, userName: user.name, projectId, expiresAt: Date.now() + this.ttlMs });
     return ticket;
   }
 
-  redeem(ticket: string): { userId: string; projectId: string } | undefined {
+  redeem(ticket: string): { userId: string; userName: string; projectId: string } | undefined {
     const entry = this.tickets.get(ticket);
     this.tickets.delete(ticket);
     if (!entry || entry.expiresAt < Date.now()) {
       return undefined;
     }
-    return { userId: entry.userId, projectId: entry.projectId };
+    return { userId: entry.userId, userName: entry.userName, projectId: entry.projectId };
   }
 
   private sweep(): void {
@@ -70,6 +71,7 @@ export class ChannelTickets {
 export function attachChannel(
   socket: ChannelSocket,
   runtime: ProjectRuntime,
+  user: { id: string; name: string },
   config: ServerConfig,
   logger: Logger,
 ): void {
@@ -173,10 +175,33 @@ export function attachChannel(
         send({ type: 'SETTINGS', payload: settings() });
         return;
       case 'ASK_AGENT':
-        send({ type: 'PROJECT_LOG', stream: 'system', text: 'Agent actions on the canvas arrive with the agent loop (M2).\n' });
+        // The canvas hands components to the agent; the workspace opens the agent with them.
+        send({ type: 'AGENT_CONTEXT', nodeIds: request.nodeIds });
         return;
       case 'SELECT_NODE':
         return;
+    }
+  };
+
+  const handlePlatform = async (request: PlatformRequest): Promise<void> => {
+    switch (request.type) {
+      case 'START_PROJECT':
+        return runtime.start();
+      case 'STOP_PROJECT':
+        runtime.agent.cancel();
+        return runtime.stop();
+      case 'RESTART_DEV_SERVER':
+        return runtime.restartDevServer();
+      case 'AGENT_START': {
+        const nodeIds = Array.isArray(request.nodeIds) ? request.nodeIds.map(String).slice(0, 50) : [];
+        await runtime.agent.start(String(request.prompt ?? ''), nodeIds, user);
+        return;
+      }
+      case 'AGENT_CANCEL':
+        runtime.agent.cancel();
+        return;
+      case 'AGENT_UNDO':
+        return runtime.agent.undo(String(request.runId));
     }
   };
 
@@ -187,19 +212,25 @@ export function attachChannel(
     } catch {
       return;
     }
-    const work = isPlatformRequest(request)
-      ? request.type === 'START_PROJECT'
-        ? runtime.start()
-        : request.type === 'STOP_PROJECT'
-          ? runtime.stop()
-          : runtime.restartDevServer()
-      : isWebviewRequest(request)
-        ? handle(request)
-        : Promise.resolve();
-    work.catch((error: unknown) => {
-      logger.error('Channel request failed', error);
-      send({ type: 'ERROR', message: describe(error) });
-    });
+    if (isPlatformRequest(request)) {
+      const agentRequest = request.type.startsWith('AGENT_');
+      handlePlatform(request).catch((error: unknown) => {
+        // Refusals to start or undo are answers for the person who asked, not server faults.
+        if (agentRequest) {
+          send({ type: 'AGENT_ERROR', message: describe(error) });
+        } else {
+          logger.error('Channel request failed', error);
+          send({ type: 'ERROR', message: describe(error) });
+        }
+      });
+      return;
+    }
+    if (isWebviewRequest(request)) {
+      handle(request).catch((error: unknown) => {
+        logger.error('Channel request failed', error);
+        send({ type: 'ERROR', message: describe(error) });
+      });
+    }
   });
 
   socket.on('close', () => {

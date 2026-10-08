@@ -1193,3 +1193,46 @@
   text-align: end;
   font-variant-numeric: tabular-nums;
 }
+
+/* ---------- agent changes ---------- */
+
+.kestrel-banner--change {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--vscode-foreground);
+  background: rgba(158, 206, 106, 0.1);
+  border-bottom-color: rgba(158, 206, 106, 0.35);
+}
+
+.kestrel-banner--change > span {
+  flex: 1;
+}
+
+.kestrel-node.is-added {
+  border-color: #9ece6a;
+  box-shadow: 0 0 0 2px rgba(158, 206, 106, 0.45), 0 0 18px rgba(158, 206, 106, 0.25);
+}
+
+.kestrel-node.is-changed {
+  border-color: #e0af68;
+  box-shadow: 0 0 0 2px rgba(224, 175, 104, 0.45);
+}
+
+.kestrel-node.is-inside {
+  box-shadow: 0 0 0 1px rgba(224, 175, 104, 0.45);
+}
+
+.kestrel-node__change {
+  margin-left: 6px;
+  padding: 0 5px;
+  border-radius: 3px;
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  color: #0d1017;
+  background: #e0af68;
+}
+
+.kestrel-node.is-added .kestrel-node__change {
+  background: #9ece6a;
+}

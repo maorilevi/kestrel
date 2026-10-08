@@ -6,6 +6,9 @@ import { fromNodeHeaders } from 'better-auth/node';
 import Fastify, { type FastifyInstance, type FastifyRequest } from 'fastify';
 
 import { isMember, readSession, type Auth, type SessionInfo } from './auth';
+import type { CreateAgentStream } from '@kestrel/ai';
+
+import { AgentRunStore } from './agent/run-store';
 import { attachChannel, ChannelTickets } from './channel';
 import type { ServerConfig } from './config';
 import type { DatabaseHandle } from './db';
@@ -22,6 +25,7 @@ export interface AppDependencies {
   logger: Logger;
   /** Overrides for tests. */
   devServerTimeoutMs?: number;
+  agentStream?: CreateAgentStream;
 }
 
 export interface KestrelServer {
@@ -43,7 +47,15 @@ export async function buildServer(deps: AppDependencies): Promise<KestrelServer>
   const { config, auth, logger } = deps;
   const app = Fastify({ logger: false, bodyLimit: 1024 * 1024 });
   const store = new ProjectStore(deps.database);
+  const runs = new AgentRunStore(deps.database);
   const runtimes = new RuntimeManager({
+    runs,
+    agent: {
+      apiKey: config.anthropicApiKey,
+      model: config.agentModel,
+      effort: config.agentEffort,
+      createStream: deps.agentStream,
+    },
     store,
     provider: deps.provider,
     repoRoot: config.repoRoot,
@@ -198,13 +210,14 @@ export async function buildServer(deps: AppDependencies): Promise<KestrelServer>
   app.delete<{ Params: { id: string } }>('/api/projects/:id', async (request, reply) => {
     const { record } = await requireProject(request, request.params.id);
     await runtimes.destroy(record);
+    await runs.deleteForProject(record.id);
     await store.delete(record.id);
     return reply.status(204).send();
   });
 
   app.post<{ Params: { id: string } }>('/api/projects/:id/channel', async (request) => {
     const { session, record } = await requireProject(request, request.params.id);
-    return { ticket: tickets.issue(session.userId, record.id) };
+    return { ticket: tickets.issue({ id: session.userId, name: session.userName }, record.id) };
   });
 
   app.get<{ Querystring: { ticket?: string } }>('/ws/projects', { websocket: true }, async (socket, request) => {
@@ -214,7 +227,7 @@ export async function buildServer(deps: AppDependencies): Promise<KestrelServer>
       socket.close(4401, 'Invalid or expired ticket');
       return;
     }
-    attachChannel(socket, runtimes.get(record), config, logger);
+    attachChannel(socket, runtimes.get(record), { id: grant.userId, name: grant.userName }, config, logger);
   });
 
   app.addHook('onClose', async () => {

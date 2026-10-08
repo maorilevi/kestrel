@@ -21,6 +21,7 @@ import {
   type ViewState,
 } from './state/view-state';
 import type {
+  ArchitectureDiff,
   ArchitectureGraph as ArchitectureGraphModel,
   ArchitectureLayer,
   ArchitectureNode,
@@ -47,6 +48,8 @@ export function App() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  /** What the last agent run changed; highlighted until the host clears it or the user dismisses it. */
+  const [diff, setDiff] = useState<ArchitectureDiff | null>(null);
   const instance = useRef<ReactFlowInstance<ArchitectureFlowNode, ArchitectureFlowEdge> | null>(null);
   /** Nodes to centre on once they are actually on screen. */
   const [pendingReveal, setPendingReveal] = useState<string[]>([]);
@@ -70,12 +73,17 @@ export function App() {
         case 'SHOW_SETTINGS':
           setSettingsOpen(true);
           break;
+        case 'ARCHITECTURE_DIFF':
+          setDiff(message.payload);
+          break;
       }
     });
 
     postRequest({ type: 'READY' });
     return unsubscribe;
   }, []);
+
+  const changes = useMemo(() => changeMarks(graph, diff), [graph, diff]);
 
   // Drop stale focus/selection when a rebuild removes nodes.
   useEffect(() => {
@@ -343,6 +351,19 @@ export function App() {
     Object.values(layerCounts).some((count) => count > 0) &&
     !visible.nodes.some((node) => node.metadata?.layer);
 
+  // Bring what the agent changed into view once the rebuilt graph contains it.
+  const revealedDiff = useRef<ArchitectureDiff | null>(null);
+  useEffect(() => {
+    if (!diff || revealedDiff.current === diff) {
+      return;
+    }
+    const ids = [...diff.addedNodes, ...diff.changedNodes].map((node) => node.id);
+    if (ids.length > 0 && ids.every((id) => graph.nodes.some((node) => node.id === id))) {
+      revealedDiff.current = diff;
+      revealNodes(ids);
+    }
+  }, [diff, graph, revealNodes]);
+
   return (
     <div className="kestrel-app">
       <Toolbar
@@ -386,6 +407,19 @@ export function App() {
           architecture graph currently understands NestJS modules, controllers and providers.
         </div>
       ) : null}
+      {diff ? (
+        <div className="kestrel-banner kestrel-banner--change">
+          <span>
+            Last agent run: {describeDiff(diff)}
+          </span>
+          <button type="button" onClick={() => revealNodes([...diff.addedNodes, ...diff.changedNodes].map((node) => node.id))}>
+            Show
+          </button>
+          <button type="button" onClick={() => setDiff(null)}>
+            Dismiss
+          </button>
+        </div>
+      ) : null}
       {hasGraph ? <Insights graph={graph} onSelectNodes={selectNodes} /> : null}
 
       <main className="kestrel-main">
@@ -400,6 +434,7 @@ export function App() {
             onReady={(value) => {
               instance.current = value;
             }}
+            changes={changes}
           />
         ) : (
           <div className="kestrel-graph kestrel-graph--empty">
@@ -453,6 +488,46 @@ export function App() {
 }
 
 /** Says what KESTREL *did* detect when no NestJS building blocks were found. */
+/** Highlights per node: what changed, and the containers that hold a change. */
+function changeMarks(graph: ArchitectureGraphModel, diff: ArchitectureDiff | null): Map<string, 'added' | 'changed' | 'inside'> {
+  const marks = new Map<string, 'added' | 'changed' | 'inside'>();
+  if (!diff) {
+    return marks;
+  }
+  const parents = new Map(graph.nodes.map((node) => [node.id, node.parentId]));
+  const markAncestors = (id: string): void => {
+    for (let parent = parents.get(id); parent; parent = parents.get(parent)) {
+      if (!marks.has(parent)) {
+        marks.set(parent, 'inside');
+      }
+    }
+  };
+  for (const node of diff.addedNodes) {
+    marks.set(node.id, 'added');
+  }
+  for (const node of diff.changedNodes) {
+    if (!marks.has(node.id) || marks.get(node.id) === 'inside') {
+      marks.set(node.id, 'changed');
+    }
+  }
+  for (const node of [...diff.addedNodes, ...diff.changedNodes]) {
+    markAncestors(node.id);
+  }
+  return marks;
+}
+
+function describeDiff(diff: ArchitectureDiff): string {
+  const parts: string[] = [];
+  const count = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
+  if (diff.addedNodes.length > 0) parts.push(`${count(diff.addedNodes.length, 'component')} added`);
+  if (diff.changedNodes.length > 0) parts.push(`${diff.changedNodes.length} changed`);
+  if (diff.removedNodes.length > 0) parts.push(`${diff.removedNodes.length} removed`);
+  if (diff.addedEdges.length + diff.removedEdges.length > 0) {
+    parts.push(count(diff.addedEdges.length + diff.removedEdges.length, 'connection') + ' rewired');
+  }
+  return parts.length > 0 ? parts.join(', ') : 'no architectural change';
+}
+
 function describeNonNestWorkspace(graph: ArchitectureGraphModel): string {
   const projects = graph.metadata?.projects ?? [];
   const ui = projects.filter((project) => project.kind === 'ui' || project.kind === 'fullstack');

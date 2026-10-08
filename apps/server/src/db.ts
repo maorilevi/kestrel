@@ -21,8 +21,31 @@ export interface ProjectTable {
   created_at: string;
 }
 
+export interface AgentRunTable {
+  id: string;
+  project_id: string;
+  prompt: string;
+  /** JSON array of node ids. */
+  node_ids: string;
+  status: string;
+  summary: string | null;
+  error: string | null;
+  /** JSON array of paths. */
+  changed_files: string;
+  commit_sha: string | null;
+  /** JSON-encoded `ArchitectureDiff`. */
+  architecture: string | null;
+  /** JSON-encoded transcript. */
+  transcript: string;
+  undone: number;
+  started_by: string;
+  started_by_name: string;
+  created_at: string;
+}
+
 export interface Database {
   project: ProjectTable;
+  agent_run: AgentRunTable;
 }
 
 export interface DatabaseHandle {
@@ -60,6 +83,33 @@ export async function migrate({ db }: DatabaseHandle): Promise<void> {
     .addColumn('preview_url', 'text')
     .addColumn('created_by', 'text', (column) => column.notNull())
     .addColumn('created_at', 'text', (column) => column.notNull().defaultTo(sql`CURRENT_TIMESTAMP`))
+    .execute();
+
+  await db.schema
+    .createTable('agent_run')
+    .ifNotExists()
+    .addColumn('id', 'text', (column) => column.primaryKey())
+    .addColumn('project_id', 'text', (column) => column.notNull())
+    .addColumn('prompt', 'text', (column) => column.notNull())
+    .addColumn('node_ids', 'text', (column) => column.notNull())
+    .addColumn('status', 'text', (column) => column.notNull())
+    .addColumn('summary', 'text')
+    .addColumn('error', 'text')
+    .addColumn('changed_files', 'text', (column) => column.notNull())
+    .addColumn('commit_sha', 'text')
+    .addColumn('architecture', 'text')
+    .addColumn('transcript', 'text', (column) => column.notNull())
+    .addColumn('undone', 'integer', (column) => column.notNull().defaultTo(0))
+    .addColumn('started_by', 'text', (column) => column.notNull())
+    .addColumn('started_by_name', 'text', (column) => column.notNull())
+    .addColumn('created_at', 'text', (column) => column.notNull())
+    .execute();
+
+  await db.schema
+    .createIndex('agent_run_project_idx')
+    .ifNotExists()
+    .on('agent_run')
+    .columns(['project_id', 'created_at'])
     .execute();
 
   await db.schema

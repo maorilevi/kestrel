@@ -6,6 +6,8 @@ import type { GraphSource } from '@kestrel/ai';
 import type { ChannelMessage, LogStream, ProjectStatus } from '@kestrel/protocol';
 import type { Sandbox, SandboxProcess, SandboxProvider } from '@kestrel/sandbox';
 
+import { AgentSession, type AgentSettings } from '../agent/agent-session';
+import type { AgentRunStore } from '../agent/run-store';
 import type { ProjectRecord, ProjectStore } from './store';
 import { parseGitHubUrl, readTemplate } from './templates';
 
@@ -17,6 +19,8 @@ export interface RuntimeDependencies {
   /** Path of the bundled `kestrel-scan.cjs` uploaded into every sandbox. */
   scannerBundlePath: string;
   logger: Logger;
+  agent: AgentSettings;
+  runs: AgentRunStore;
   /** How long the dev server may take to answer before the project is in error. */
   devServerTimeoutMs?: number;
 }
@@ -48,6 +52,12 @@ export class ProjectRuntime implements GraphSource {
 
   private readonly log: Array<{ stream: LogStream; text: string }> = [];
   private readonly listeners = new Set<(message: ChannelMessage) => void>();
+  /** Counts scans the scanner started, so a waiter can ask for a graph built after a point in time. */
+  private scansStarted = 0;
+  private currentScan = 0;
+  private readonly graphWaiters = new Set<{ after: number; resolve: (graph: ArchitectureGraph) => void }>();
+
+  readonly agent: AgentSession;
 
   constructor(
     private record: ProjectRecord,
@@ -56,6 +66,18 @@ export class ProjectRuntime implements GraphSource {
     // A status persisted as active belonged to a process that no longer exists.
     this.status = ACTIVE.has(record.status) ? 'stopped' : record.status;
     this.previewUrl = undefined;
+    this.agent = new AgentSession(
+      {
+        projectId: record.id,
+        activeSandbox: () => (this.status === 'ready' || this.status === 'running' ? this.sandbox : undefined),
+        getGraph: () => this.graph,
+        rescanAndWait: (timeoutMs) => this.rescanAndWait(timeoutMs),
+        broadcast: (message) => this.broadcast(message),
+      },
+      deps.agent,
+      deps.runs,
+      deps.logger,
+    );
   }
 
   get id(): string {
@@ -76,6 +98,14 @@ export class ProjectRuntime implements GraphSource {
     listener({ type: 'PROJECT_LOG_HISTORY', entries: [...this.log] });
     listener(this.architectureMessage());
     this.listeners.add(listener);
+    void this.agent.snapshot().then(
+      (messages) => {
+        if (this.listeners.has(listener)) {
+          messages.forEach(listener);
+        }
+      },
+      (error: unknown) => this.deps.logger.warn(`Could not load agent history: ${describe(error)}`),
+    );
     return () => this.listeners.delete(listener);
   }
 
@@ -134,6 +164,29 @@ export class ProjectRuntime implements GraphSource {
     void this.scanner?.write('scan\n');
   }
 
+  /** Rescans and resolves with the first graph from a scan that started after this call. */
+  rescanAndWait(timeoutMs: number): Promise<ArchitectureGraph | undefined> {
+    if (!this.scanner) {
+      return Promise.resolve(undefined);
+    }
+    return new Promise((resolve) => {
+      const waiter = {
+        after: this.scansStarted,
+        resolve: (graph: ArchitectureGraph) => {
+          clearTimeout(timer);
+          this.graphWaiters.delete(waiter);
+          resolve(graph);
+        },
+      };
+      const timer = setTimeout(() => {
+        this.graphWaiters.delete(waiter);
+        resolve(undefined);
+      }, timeoutMs);
+      this.graphWaiters.add(waiter);
+      this.rescan();
+    });
+  }
+
   async readFile(filePath: string): Promise<string> {
     const sandbox = this.sandbox ?? (await this.reattach());
     if (!sandbox) {
@@ -167,6 +220,12 @@ export class ProjectRuntime implements GraphSource {
       if (manifest && (fresh || !(await this.exists(sandbox, 'node_modules')))) {
         await this.setStatus('installing');
         await this.exec(sandbox, 'npm install --no-audit --no-fund', 'Installing dependencies', 15 * 60_000);
+        // The lockfile the install wrote belongs to the baseline, not to the first agent run.
+        if (fresh && this.record.source.kind === 'template') {
+          await sandbox.run(
+            'git add -A && git -c user.name=KESTREL -c user.email=bot@kestrel.dev commit -qm "Install dependencies"',
+          );
+        }
       }
 
       await this.startScanner(sandbox);
@@ -240,10 +299,18 @@ export class ProjectRuntime implements GraphSource {
     } catch {
       return;
     }
-    if (event.type === 'graph' && event.graph) {
+    if (event.type === 'scanning') {
+      this.scansStarted += 1;
+      this.currentScan = this.scansStarted;
+    } else if (event.type === 'graph' && event.graph) {
       this.graph = event.graph;
       this.hasGraph = true;
       this.broadcast({ type: 'ARCHITECTURE_UPDATED', payload: event.graph });
+      for (const waiter of [...this.graphWaiters]) {
+        if (this.currentScan > waiter.after) {
+          waiter.resolve(event.graph);
+        }
+      }
     } else if (event.type === 'error' && event.message) {
       this.system(`Architecture build failed: ${event.message}`, 'stderr');
       this.broadcast({ type: 'ERROR', message: event.message });

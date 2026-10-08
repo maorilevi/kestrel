@@ -42,6 +42,8 @@ export interface ArchitectureGraphProps {
   onSelectionChange: (nodeIds: string[]) => void;
   onDive: (nodeId: string) => void;
   onReady: (instance: ReactFlowInstance<ArchitectureFlowNode, ArchitectureFlowEdge>) => void;
+  /** What the last agent run changed, by node id. */
+  changes?: ReadonlyMap<string, 'added' | 'changed' | 'inside'>;
 }
 
 /**
@@ -55,6 +57,7 @@ export function ArchitectureGraph({
   onSelectionChange,
   onDive,
   onReady,
+  changes,
 }: ArchitectureGraphProps) {
   const { flowNodes, flowEdges, signature } = useMemo(() => {
     const positions = layoutGraph(visible.nodes, visible.edges);
@@ -85,6 +88,7 @@ export function ArchitectureGraph({
           isFocus: node.id === focusId,
           childCount: childCounts.get(node.id) ?? 0,
           dependencyCount: dependencyCounts.get(node.id) ?? 0,
+          change: changes?.get(node.id),
         },
       };
     });

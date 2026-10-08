@@ -13,11 +13,24 @@ export interface ServerConfig {
   sandbox: { provider: 'local' } | { provider: 'e2b'; apiKey: string; template: string };
   anthropicApiKey?: string;
   chatModel: string;
+  agentModel: string;
+  agentEffort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
   /** Root of the KESTREL repository, for templates and the scanner bundle. */
   repoRoot: string;
 }
 
 const here = path.dirname(fileURLToPath(import.meta.url));
+
+function parseEffort(value: string | undefined): ServerConfig['agentEffort'] {
+  if (value === undefined || value === '') {
+    // The recommended level for coding and agentic work.
+    return 'xhigh';
+  }
+  if (value === 'low' || value === 'medium' || value === 'high' || value === 'xhigh' || value === 'max') {
+    return value;
+  }
+  throw new Error(`KESTREL_AGENT_EFFORT must be low, medium, high, xhigh or max (got "${value}").`);
+}
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
   const port = Number(env.PORT ?? 4000);
@@ -58,7 +71,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): ServerConfig {
     dataDir,
     sandbox,
     anthropicApiKey: env.ANTHROPIC_API_KEY || undefined,
-    chatModel: env.KESTREL_CHAT_MODEL ?? 'claude-opus-5-5',
+    chatModel: env.KESTREL_CHAT_MODEL ?? 'claude-opus-5',
+    agentModel: env.KESTREL_AGENT_MODEL ?? 'claude-opus-5',
+    agentEffort: parseEffort(env.KESTREL_AGENT_EFFORT),
     repoRoot: path.resolve(here, '..', '..', '..'),
   };
 }
