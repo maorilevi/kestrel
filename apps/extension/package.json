@@ -1,0 +1,224 @@
+{
+  "name": "kestrel",
+  "displayName": "KESTREL",
+  "description": "A bird's-eye view of your codebase. Interactive architecture map for TypeScript / NestJS projects.",
+  "version": "0.0.1",
+  "publisher": "kestrel-dev",
+  "license": "MIT",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/kestrel-dev/kestrel.git"
+  },
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Visualization",
+    "Programming Languages",
+    "Other"
+  ],
+  "keywords": [
+    "architecture",
+    "nestjs",
+    "typescript",
+    "graph",
+    "visualization"
+  ],
+  "main": "./dist/extension.js",
+  "activationEvents": [
+    "onView:kestrel.overview"
+  ],
+  "contributes": {
+    "commands": [
+      {
+        "command": "kestrel.openArchitecture",
+        "title": "Open Architecture",
+        "category": "KESTREL",
+        "icon": "$(type-hierarchy)"
+      },
+      {
+        "command": "kestrel.refreshArchitecture",
+        "title": "Refresh Architecture",
+        "category": "KESTREL",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "kestrel.openFile",
+        "title": "Open File",
+        "category": "KESTREL"
+      },
+      {
+        "command": "kestrel.copyAgentContext",
+        "title": "Copy Architecture Context for AI Agent",
+        "category": "KESTREL"
+      },
+      {
+        "command": "kestrel.setApiKey",
+        "title": "Set Anthropic API Key",
+        "category": "KESTREL"
+      },
+      {
+        "command": "kestrel.testChat",
+        "title": "Test Chat Connection",
+        "category": "KESTREL"
+      },
+      {
+        "command": "kestrel.signIn",
+        "title": "Connect Chat",
+        "category": "KESTREL"
+      },
+      {
+        "command": "kestrel.selectChatModel",
+        "title": "Select Chat Model",
+        "category": "KESTREL"
+      },
+      {
+        "command": "kestrel.openSettings",
+        "title": "Open Settings",
+        "category": "KESTREL"
+      }
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "kestrel.openFile",
+          "when": "false"
+        },
+        {
+          "command": "kestrel.copyAgentContext",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "kestrel.openArchitecture",
+          "when": "view == kestrel.overview",
+          "group": "navigation@1"
+        },
+        {
+          "command": "kestrel.refreshArchitecture",
+          "when": "view == kestrel.overview",
+          "group": "navigation@2"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "kestrel",
+          "title": "KESTREL",
+          "icon": "media/kestrel.svg"
+        }
+      ]
+    },
+    "views": {
+      "kestrel": [
+        {
+          "id": "kestrel.overview",
+          "name": "Project Overview",
+          "contextualTitle": "KESTREL"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "KESTREL",
+      "properties": {
+        "kestrel.autoRefresh": {
+          "type": "boolean",
+          "default": true,
+          "description": "Automatically rebuild the architecture when TypeScript files change."
+        },
+        "kestrel.refreshDebounceMs": {
+          "type": "number",
+          "default": 700,
+          "minimum": 200,
+          "maximum": 10000,
+          "description": "Debounce window (ms) applied to file changes before the architecture is rebuilt."
+        },
+        "kestrel.exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "description": "Additional glob patterns to exclude from the architecture scan."
+        },
+        "kestrel.maxFiles": {
+          "type": "number",
+          "default": 5000,
+          "description": "Safety limit for the number of TypeScript files analysed per workspace folder."
+        },
+        "kestrel.chat.model": {
+          "type": "string",
+          "default": "claude-opus-5",
+          "enum": [
+            "claude-opus-5",
+            "claude-sonnet-5",
+            "claude-haiku-4-5"
+          ],
+          "enumDescriptions": [
+            "Most capable (default)",
+            "Faster and cheaper",
+            "Fastest, for simple questions"
+          ],
+          "markdownDescription": "Anthropic model used by the architecture chat. Requires an API key set through **KESTREL: Set Anthropic API Key**."
+        },
+        "kestrel.chat.effort": {
+          "type": "string",
+          "default": "high",
+          "enum": [
+            "low",
+            "medium",
+            "high",
+            "xhigh",
+            "max"
+          ],
+          "description": "How much reasoning the model spends on an answer. Lower is faster and cheaper."
+        },
+        "kestrel.chat.timeoutMs": {
+          "type": "number",
+          "default": 120000,
+          "minimum": 10000,
+          "description": "Milliseconds to wait for a chat answer before giving up."
+        },
+        "kestrel.chat.provider": {
+          "type": "string",
+          "default": "auto",
+          "enum": [
+            "auto",
+            "anthropic",
+            "vscode"
+          ],
+          "enumDescriptions": [
+            "Use Anthropic when credentials are available, otherwise a VS Code model",
+            "Always use the Anthropic API",
+            "Always use a language model provided by VS Code"
+          ],
+          "description": "Which model provider answers architecture questions."
+        },
+        "kestrel.chat.vsCodeModel": {
+          "type": "string",
+          "default": "",
+          "description": "Id of the VS Code language model to use. Empty picks the best available."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "vscode:prepublish": "npm run typecheck && npm run build",
+    "package": "vsce package --no-dependencies --out kestrel-0.0.1.vsix"
+  },
+  "devDependencies": {
+    "@kestrel/ai": "*",
+    "@kestrel/core": "*",
+    "@kestrel/protocol": "*",
+    "@kestrel/ui": "*",
+    "@types/vscode": "^1.90.0",
+    "@vscode/vsce": "^3.9.2"
+  },
+  "icon": "media/icon.png"
+}

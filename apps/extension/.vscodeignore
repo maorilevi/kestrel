@@ -1,0 +1,14 @@
+.vscode/**
+.github/**
+node_modules/**
+src/**
+tests/**
+out/**
+**/*.map
+**/*.ts
+!dist/**
+esbuild.js
+tsconfig.json
+.gitignore
+*.vsix
+media/generate-icons.js

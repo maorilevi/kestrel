@@ -3,15 +3,16 @@
   "tasks": [
     {
       "type": "npm",
-      "script": "build",
+      "script": "build:extension",
       "group": "build",
       "problemMatcher": [],
-      "label": "npm: build",
+      "label": "npm: build:extension",
       "detail": "Bundle the extension and the webview with esbuild"
     },
     {
       "type": "npm",
       "script": "watch",
+      "path": "apps/extension",
       "group": "build",
       "isBackground": true,
       "problemMatcher": [],

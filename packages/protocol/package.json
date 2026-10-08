@@ -1,0 +1,15 @@
+{
+  "name": "@kestrel/protocol",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Typed message contract between a KESTREL host (extension, web server) and the canvas UI.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@kestrel/core": "*"
+  }
+}

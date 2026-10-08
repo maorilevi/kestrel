@@ -1,0 +1,16 @@
+{
+  "name": "@kestrel/ai",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Architecture-aware chat and coding-agent context for KESTREL.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.117.1",
+    "@kestrel/core": "*"
+  }
+}

@@ -1,0 +1,17 @@
+{
+  "name": "@kestrel/core",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Deterministic architecture discovery: scan, parse, profile and build the KESTREL system graph.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./model": "./src/model.ts",
+    "./testing": "./src/testing.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "ts-morph": "^28.0.0"
+  }
+}
